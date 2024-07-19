@@ -1,12 +1,10 @@
-use actix_service::Service;
 use actix_web::{
-    dev::ServiceResponse,
     http::StatusCode,
     test::{call_service, init_service, TestRequest},
     web, App, HttpResponse,
 };
 use std::sync::{Arc, Mutex};
-use rate_limit::{Limiter, RateLimiter}; // Adjust this path to match your exact project structure
+use rate_limit::{Limiter, RateLimiter};
 use actix_rt::time::sleep;
 use std::time::Duration as StdDuration;
 use std::collections::HashMap;
