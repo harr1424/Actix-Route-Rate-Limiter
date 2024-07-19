@@ -44,6 +44,13 @@ async fn test_rate_limiter_allows_two_requests() {
         .to_request();
     let resp = call_service(&service, req).await;
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    // Attempt a fourth request immediately (Expected to fail also)
+    let req = TestRequest::default()
+        .peer_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345))
+        .to_request();
+    let resp = call_service(&service, req).await;
+    assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
 #[actix_rt::test]
@@ -66,10 +73,24 @@ async fn test_rate_limiter_allows_after_duration() {
     let resp = call_service(&service, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
+    // Second request should succeed
+    let req = TestRequest::default()
+        .peer_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345))
+        .to_request();
+    let resp = call_service(&service, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
     // Wait for more than 20 seconds
     sleep(StdDuration::from_secs(21)).await;
 
-    // Next request should also succeed after waiting
+    // Third request should also succeed after waiting
+    let req = TestRequest::default()
+        .peer_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345))
+        .to_request();
+    let resp = call_service(&service, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Fourth request after waiting should succeed
     let req = TestRequest::default()
         .peer_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345))
         .to_request();

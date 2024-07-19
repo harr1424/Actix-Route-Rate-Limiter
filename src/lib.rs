@@ -3,8 +3,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Duration, Utc};
-use actix_service::Transform;
-use actix_web::dev::ServiceRequest;
+use actix_service::{Service, Transform};
+use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::{Error, HttpResponse};
 use futures::future::{ok, Ready};
 use std::task::{Context, Poll};
@@ -63,22 +63,29 @@ where
         None => return Ok(req.into_response(bad_response)),
     };
 
+    println!("Request from IP: {}", ip);
+
     let now = Utc::now();
     {
         let mut limiter = limiter.lock().unwrap();
         let (last_request_time, request_count) = limiter.ip_addresses.entry(ip.clone())
-            .or_insert((now, 1));
+            .or_insert((now, 0));
+
+        println!("IP: {} - Last Request Time: {}, Request Count: {}", ip, last_request_time, request_count);
 
         if now - *last_request_time <= Duration::seconds(20) {
             if *request_count >= 2 {
+                println!("IP: {} - Too Many Requests", ip);
                 return Ok(req.into_response(too_many_requests));
             } else {
                 *request_count += 1;
+                println!("IP: {} - Incremented Request Count: {}", ip, request_count);
             }
         } else {
             // Reset time and count after 20 seconds
             *last_request_time = now;
             *request_count = 1;
+            println!("IP: {} - Reset Request Count and Time", ip);
         }
     }
 
