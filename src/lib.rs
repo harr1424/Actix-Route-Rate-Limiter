@@ -48,7 +48,7 @@ where
     }
 }
 
-pub(crate) async fn handle_rate_limiting<S>(
+pub async fn handle_rate_limiting<S>(
     req: ServiceRequest,
     limiter: Arc<Mutex<Limiter>>,
     service: Arc<S>,
