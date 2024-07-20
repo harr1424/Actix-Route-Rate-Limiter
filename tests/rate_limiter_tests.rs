@@ -3,18 +3,19 @@ use actix_web::{
     test::{call_service, init_service, TestRequest},
     web, App, HttpResponse,
 };
-use std::sync::{Arc, Mutex};
-use rate_limit::{Limiter, RateLimiter};
+use std::sync::Arc;
+use rate_limit::{LimiterBuilder, RateLimiter};
 use actix_rt::time::sleep;
 use std::time::Duration as StdDuration;
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use chrono::Duration;
 
 #[actix_rt::test]
 async fn test_rate_limiter_allows_two_requests() {
-    let limiter = Arc::new(Mutex::new(Limiter {
-        ip_addresses: HashMap::new(),
-    }));
+    let limiter = LimiterBuilder::new()
+        .with_duration(Duration::seconds(20))
+        .with_num_requests(2)
+        .build();
 
     let service = init_service(
         App::new()
@@ -53,9 +54,10 @@ async fn test_rate_limiter_allows_two_requests() {
 
 #[actix_rt::test]
 async fn test_rate_limiter_allows_after_duration() {
-    let limiter = Arc::new(Mutex::new(Limiter {
-        ip_addresses: HashMap::new(),
-    }));
+    let limiter = LimiterBuilder::new()
+        .with_duration(Duration::seconds(20))
+        .with_num_requests(2)
+        .build();
 
     let service = init_service(
         App::new()
@@ -98,9 +100,10 @@ async fn test_rate_limiter_allows_after_duration() {
 
 #[actix_rt::test]
 async fn test_rate_limiter_with_different_ips() {
-    let limiter = Arc::new(Mutex::new(Limiter {
-        ip_addresses: HashMap::new(),
-    }));
+    let limiter = LimiterBuilder::new()
+        .with_duration(Duration::seconds(20))
+        .with_num_requests(2)
+        .build();
 
     let service = init_service(
         App::new()
@@ -140,9 +143,10 @@ async fn test_rate_limiter_with_different_ips() {
 
 #[actix_rt::test]
 async fn test_rate_limiter_handles_missing_ip() {
-    let limiter = Arc::new(Mutex::new(Limiter {
-        ip_addresses: HashMap::new(),
-    }));
+    let limiter = LimiterBuilder::new()
+        .with_duration(Duration::seconds(20))
+        .with_num_requests(2)
+        .build();
 
     let service = init_service(
         App::new()
