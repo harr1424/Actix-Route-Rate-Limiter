@@ -8,7 +8,8 @@ use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::{Error, HttpResponse};
 use futures::future::{ok, Ready};
 use std::task::{Context, Poll};
-use actix_web::body::BoxBody;
+use actix_web::body::{BoxBody, EitherBody, MessageBody};
+
 
 pub struct Limiter {
     pub ip_addresses: HashMap<String, (DateTime<Utc>, usize)>,
@@ -29,12 +30,13 @@ pub struct RateLimiterMiddleware<S> {
     pub(crate) limiter: Arc<Mutex<Limiter>>,
 }
 
-impl<S> Transform<S, ServiceRequest> for RateLimiter
+impl<S, B> Transform<S, ServiceRequest> for RateLimiter
 where
-    S: Service<ServiceRequest, Response=ServiceResponse<BoxBody>, Error=Error> + 'static,
+    S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error> + 'static,
     S::Future: 'static,
+    B: 'static + MessageBody,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response=ServiceResponse<EitherBody<B, BoxBody>>;
     type Error = Error;
     type Transform = RateLimiterMiddleware<S>;
     type InitError = ();
@@ -48,19 +50,46 @@ where
     }
 }
 
-pub async fn handle_rate_limiting<S>(
+impl<S, B> Service<ServiceRequest> for RateLimiterMiddleware<S>
+where
+    S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error> + 'static,
+    S::Future: 'static,
+    B: 'static + MessageBody,
+{
+    type Response=ServiceResponse<EitherBody<B, BoxBody>>;
+    type Error = Error;
+    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
+
+    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(cx)
+    }
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let limiter = Arc::clone(&self.limiter);
+        let service = Arc::clone(&self.service);
+
+        Box::pin(handle_rate_limiting(req, limiter, service))
+    }
+}
+
+pub async fn handle_rate_limiting<S, B>(
     req: ServiceRequest,
     limiter: Arc<Mutex<Limiter>>,
     service: Arc<S>,
-) -> Result<ServiceResponse<BoxBody>, Error>
+) -> Result<ServiceResponse<EitherBody<B>>, Error>
 where
-    S: Service<ServiceRequest, Response=ServiceResponse<BoxBody>, Error=Error>,
+    S: Service<ServiceRequest, Response=ServiceResponse<B>, Error=Error>,
+    S::Future: 'static,
+    B: 'static + MessageBody,
 {
-    let bad_response = HttpResponse::BadRequest().finish().map_into_boxed_body();
-    let too_many_requests = HttpResponse::TooManyRequests().finish().map_into_boxed_body();
     let ip = match req.peer_addr().map(|addr| addr.ip().to_string()) {
         Some(ip) => ip,
-        None => return Ok(req.into_response(bad_response)),
+        None => {
+            let bad_request_response = HttpResponse::BadRequest().finish();
+            return Ok(ServiceResponse::new(req.request().clone(), bad_request_response)
+                .map_into_boxed_body()
+                .map_into_right_body());
+        }
     };
 
     println!("Request from IP: {}", ip);
@@ -76,7 +105,10 @@ where
         if now - *last_request_time <= Duration::seconds(20) {
             if *request_count >= 2 {
                 println!("IP: {} - Too Many Requests", ip);
-                return Ok(req.into_response(too_many_requests));
+                let too_many_requests_response = HttpResponse::TooManyRequests().finish();
+                return Ok(ServiceResponse::new(req.request().clone(), too_many_requests_response)
+                    .map_into_boxed_body()
+                    .map_into_right_body());
             } else {
                 *request_count += 1;
                 println!("IP: {} - Incremented Request Count: {}", ip, request_count);
@@ -89,27 +121,11 @@ where
         }
     }
 
-    let res = service.call(req).await?;
-    Ok(res)
+    let res : ServiceResponse<B> = service.call(req).await?;
+    Ok(res.map_into_left_body())
 }
 
-impl<S> Service<ServiceRequest> for RateLimiterMiddleware<S>
-where
-    S: Service<ServiceRequest, Response=ServiceResponse<BoxBody>, Error=Error> + 'static,
-    S::Future: 'static,
-{
-    type Response = ServiceResponse<BoxBody>;
-    type Error = Error;
-    type Future = Pin<Box<dyn Future<Output=Result<Self::Response, Self::Error>>>>;
 
-    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(cx)
-    }
 
-    fn call(&self, req: ServiceRequest) -> Self::Future {
-        let limiter = Arc::clone(&self.limiter);
-        let service = Arc::clone(&self.service);
 
-        Box::pin(handle_rate_limiting(req, limiter, service))
-    }
-}
+
