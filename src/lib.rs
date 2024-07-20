@@ -167,10 +167,12 @@ where
 
     if too_many_requests {
         println!("IP: {} - Too Many Requests", ip);
+        let message = format!("Too many requests. Please try again in {} seconds.", limiter_duration_secs.to_string());
+
         let too_many_requests_response = HttpResponse::TooManyRequests()
             .content_type("text/html")
             .insert_header(("Retry-After", limiter_duration_secs.to_string()))
-            .body("Too many requests. Please try again later.");
+            .body(message);
         return Ok(ServiceResponse::new(req.request().clone(), too_many_requests_response)
             .map_into_boxed_body()
             .map_into_right_body());
