@@ -104,6 +104,7 @@ where
 
         if now - *last_request_time <= Duration::seconds(20) {
             if *request_count >= 2 {
+                *request_count += 1;
                 println!("IP: {} - Too Many Requests", ip);
                 let too_many_requests_response = HttpResponse::TooManyRequests().finish();
                 return Ok(ServiceResponse::new(req.request().clone(), too_many_requests_response)
