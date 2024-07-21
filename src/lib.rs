@@ -31,7 +31,7 @@ pub struct LimiterBuilder {
 impl LimiterBuilder {
     pub fn new() -> Self {
         Self {
-            duration: Duration::days(1),
+            duration: Duration::seconds(1),
             num_requests: 1,
         }
     }
