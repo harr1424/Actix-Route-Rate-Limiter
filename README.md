@@ -1,6 +1,6 @@
 ## rate_limit
 
-A simple [package](https://stackoverflow.com/questions/68250956/what-is-the-exact-difference-between-a-crate-and-a-package) containing a single library crate used to rate-limit endpoints on an Actix-Web server. 
+A library crate that can be used to add rate limiting middleware to a Actix Web server endpoints.
 
 ```rust
 use actix_web::{web, App, HttpServer, HttpResponse};
