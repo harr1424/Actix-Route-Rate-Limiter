@@ -8,7 +8,7 @@ use rate_limit::{LimiterBuilder, RateLimiter};
 
 #[actix_web::main]
 pub async fn run() -> std::io::Result<()> {
-...
+
     // build a limiter
     let limiter = LimiterBuilder::new()
         .with_duration(Duration::seconds(20)) // default one second
