@@ -146,8 +146,6 @@ where
     let last_request_time = time_count.last_request;
     let request_count = time_count.num_requests;
 
-    println!("IP: {} - Last Request Time: {}, Request Count: {}", ip, last_request_time, request_count);
-
     let mut too_many_requests = false;
     let mut new_last_request_time = last_request_time;
     let mut new_request_count = request_count;
@@ -159,13 +157,11 @@ where
             too_many_requests = true;
         } else {
             new_request_count += 1;
-            println!("IP: {} - Incremented Request Count: {}", ip, new_request_count);
         }
     } else {
         // Reset time and count
         new_last_request_time = now;
         new_request_count = 1;
-        println!("IP: {} - Reset Request Count and Time", ip);
     }
 
     {
@@ -175,7 +171,6 @@ where
     }
 
     if too_many_requests {
-        println!("IP: {} - Too Many Requests", ip);
         let remaining_time = limiter.duration - (now - last_request_time);
         let message = format!("Too many requests. Please try again in {} seconds.", remaining_time.num_seconds().to_string());
 
