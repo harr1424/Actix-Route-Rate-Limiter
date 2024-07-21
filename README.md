@@ -1,4 +1,4 @@
-## rate_limit
+## Actix Route Rate Limiter
 
 A library crate that can be used to add rate limiting middleware to Actix Web application routes.
 
