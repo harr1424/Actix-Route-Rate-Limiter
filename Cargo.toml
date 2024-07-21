@@ -8,6 +8,7 @@ actix-web = "4.0"
 actix-service = "2.0.2"
 chrono = "0.4"
 futures = "0.3"
+dashmap = "6.0.1"
 
 [dev-dependencies]
 actix-rt = "2.5"

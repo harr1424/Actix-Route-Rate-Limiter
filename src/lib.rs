@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::net::IpAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Duration, Utc};
@@ -10,9 +11,14 @@ use futures::future::{ok, Ready};
 use std::task::{Context, Poll};
 use actix_web::body::{BoxBody, EitherBody, MessageBody};
 
+#[derive(Clone)]
+pub struct TimeCount {
+    last_request: DateTime<Utc>,
+    num_requests: usize,
+}
 
 pub struct Limiter {
-    pub ip_addresses: HashMap<String, (DateTime<Utc>, usize)>,
+    pub ip_addresses: HashMap<IpAddr, TimeCount>,
     pub duration: Duration,
     pub num_requests: usize,
 }
@@ -119,22 +125,26 @@ where
     B: 'static + MessageBody,
 {
     let ip = match req.peer_addr() {
-        Some(addr) => addr.ip().to_string(),
+        Some(addr) => addr.ip(),
         None => {
-            let bad_request_response = HttpResponse::BadRequest()
-                .content_type("text/html")
-                .body("Missing IP address.");
-            return Ok(ServiceResponse::new(req.request().clone(), bad_request_response)
-                .map_into_boxed_body()
-                .map_into_right_body());
+            // peer_Addr only returns None during unit test https://docs.rs/actix-web/latest/actix_web/struct.HttpRequest.html#method.peer_addr
+            let res: ServiceResponse<B> = service.call(req).await?;
+            return Ok(res.map_into_left_body());
         }
     };
-    let now = Utc::now();
 
-    let (last_request_time, request_count) = {
-        let mut limiter = limiter.lock().unwrap();
-        limiter.ip_addresses.entry(ip.clone()).or_insert((now, 0)).clone()
+    let now = Utc::now();
+    let mut limiter = limiter.lock().unwrap();
+
+    let time_count = {
+        limiter.ip_addresses.entry(ip.clone()).or_insert(TimeCount {
+            last_request: now,
+            num_requests: 0,
+        }).clone()
     };
+
+    let last_request_time = time_count.last_request;
+    let request_count = time_count.num_requests;
 
     println!("IP: {} - Last Request Time: {}, Request Count: {}", ip, last_request_time, request_count);
 
@@ -142,10 +152,10 @@ where
     let mut new_last_request_time = last_request_time;
     let mut new_request_count = request_count;
 
-    let limiter_duration_secs = limiter.lock().unwrap().duration.num_seconds();
+    let limiter_duration_secs = limiter.duration.num_seconds();
 
     if now - last_request_time <= Duration::seconds(limiter_duration_secs) {
-        if request_count >= limiter.lock().unwrap().num_requests {
+        if request_count >= limiter.num_requests {
             too_many_requests = true;
         } else {
             new_request_count += 1;
@@ -159,19 +169,22 @@ where
     }
 
     {
-        let mut limiter = limiter.lock().unwrap();
-        let entry = limiter.ip_addresses.entry(ip.clone()).or_insert((now, 0));
-        entry.0 = new_last_request_time;
-        entry.1 = new_request_count;
+        let entry = limiter.ip_addresses.entry(ip.clone()).or_insert(TimeCount { last_request: now, num_requests: 0 });
+        entry.last_request = new_last_request_time;
+        entry.num_requests = new_request_count;
     }
 
     if too_many_requests {
         println!("IP: {} - Too Many Requests", ip);
-        let message = format!("Too many requests. Please try again in {} seconds.", limiter_duration_secs.to_string());
+        let remaining_time = limiter.duration - (now - last_request_time);
+        let message = format!("Too many requests. Please try again in {} seconds.", remaining_time.num_seconds().to_string());
 
         let too_many_requests_response = HttpResponse::TooManyRequests()
-            .content_type("text/html")
+            .content_type("text/plain")
             .insert_header(("Retry-After", limiter_duration_secs.to_string()))
+            .insert_header(("X-RateLimit-Limit", limiter.num_requests.to_string()))
+            .insert_header(("X-RateLimit-Remaining", (limiter.num_requests - new_request_count).to_string()))
+            .insert_header(("X-RateLimit-Reset", remaining_time.num_seconds().to_string()))
             .body(message);
         return Ok(ServiceResponse::new(req.request().clone(), too_many_requests_response)
             .map_into_boxed_body()
@@ -181,8 +194,3 @@ where
     let res: ServiceResponse<B> = service.call(req).await?;
     Ok(res.map_into_left_body())
 }
-
-
-
-
-

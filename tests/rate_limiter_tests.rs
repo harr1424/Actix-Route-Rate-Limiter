@@ -43,6 +43,11 @@ async fn test_rate_limiter_allows_two_requests() {
         .to_request();
     let resp = call_service(&service, req).await;
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(resp.headers().get("Retry-After").unwrap(), "20");
+    assert_eq!(resp.headers().get("X-RateLimit-Limit").unwrap(), "2");
+    assert_eq!(resp.headers().get("X-RateLimit-Remaining").unwrap(), "0");
+    // Check if X-RateLimit-Reset header exists
+    assert!(resp.headers().get("X-RateLimit-Reset").is_some());
 
     // Attempt a fourth request immediately (Expected to fail also)
     let req = TestRequest::default()
@@ -50,6 +55,11 @@ async fn test_rate_limiter_allows_two_requests() {
         .to_request();
     let resp = call_service(&service, req).await;
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(resp.headers().get("Retry-After").unwrap(), "20");
+    assert_eq!(resp.headers().get("X-RateLimit-Limit").unwrap(), "2");
+    assert_eq!(resp.headers().get("X-RateLimit-Remaining").unwrap(), "0");
+    // Check if X-RateLimit-Reset header exists
+    assert!(resp.headers().get("X-RateLimit-Reset").is_some());
 }
 
 #[actix_rt::test]
@@ -139,6 +149,11 @@ async fn test_rate_limiter_with_different_ips() {
         .to_request();
     let resp = call_service(&service, req).await;
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(resp.headers().get("Retry-After").unwrap(), "20");
+    assert_eq!(resp.headers().get("X-RateLimit-Limit").unwrap(), "2");
+    assert_eq!(resp.headers().get("X-RateLimit-Remaining").unwrap(), "0");
+    // Check if X-RateLimit-Reset header exists
+    assert!(resp.headers().get("X-RateLimit-Reset").is_some());
 }
 
 #[actix_rt::test]
@@ -158,5 +173,5 @@ async fn test_rate_limiter_handles_missing_ip() {
     // Simulate a request without an IP address
     let req = TestRequest::default().to_request();
     let resp = call_service(&service, req).await;
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(resp.status(), StatusCode::OK);
 }
