@@ -33,9 +33,9 @@ This crate can be used to wrap routes with rate limiting logic by defining a dur
 and number of requests that will be forwarded during that duration.
 
 If a quantity of requests exceeds this amount, the middleware will short circuit the request and instead send an `HTTP 429 - Too Many Requests` response with headers describing the rate limit:
-- "Retry-After" : value representing the rate duration limit
-- "X-RateLimit-Limit" : number of requests allowed for the duration
-- "X-RateLimit-Remaining" : number of requests remaining for current duration
-- "X-RateLimit-Reset" : number of seconds remaining in the duration
+- `Retry-After` : value representing the rate duration limit
+- `X-RateLimit-Limit` : number of requests allowed for the duration
+- `X-RateLimit-Remaining` : number of requests remaining for current duration
+- `X-RateLimit-Reset` : number of seconds remaining in the duration
 
 [Actix Web docs regarding App.wrap()](https://docs.rs/actix-web/latest/actix_web/struct.App.html#method.wrap)
