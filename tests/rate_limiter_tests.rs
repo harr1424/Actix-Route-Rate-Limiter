@@ -1,7 +1,7 @@
 use actix_web::{web, App, HttpServer, HttpResponse};
 use actix_web::test::{init_service, call_service, TestRequest};
 use std::sync::{Arc, Mutex};
-use rate_limit::{Limiter, LimiterBuilder, RateLimiter};
+use actix_route_rate_limiter::{Limiter, LimiterBuilder, RateLimiter};
 use actix_rt::time::sleep;
 use std::time::Duration as StdDuration;
 use chrono::Duration;

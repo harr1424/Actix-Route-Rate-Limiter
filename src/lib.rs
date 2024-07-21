@@ -52,7 +52,7 @@ pub struct LimiterBuilder {
 ///  # Example
 /// ```
 /// use chrono::Duration;
-/// use rate_limit::LimiterBuilder;
+/// use actix_route_rate_limiter::LimiterBuilder;
 ///
 /// let limiter = LimiterBuilder::new()
 ///         .with_duration(Duration::seconds(20))
