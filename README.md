@@ -11,8 +11,8 @@ pub async fn run() -> std::io::Result<()> {
 
     // build a limiter
     let limiter = LimiterBuilder::new()
-        .with_duration(Duration::seconds(20)) // default one second
-        .with_num_requests(2) // default one request
+        .with_duration(Duration::seconds(20)) // default value is one second
+        .with_num_requests(2) // default value is one request
         .build();
 
 
