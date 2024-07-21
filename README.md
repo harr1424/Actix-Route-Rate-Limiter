@@ -29,4 +29,16 @@ pub async fn main() -> std::io::Result<()> {
 }
 ```
 
+//! This crate can be used to wrap routes with rate limiting logic.
+//! This logic allows for rate limiting requests by defining a duration
+//! and number of requests that will be forwarded during that duration.
+//!
+//! If a quantity of requests exceeds this amount, the middleware
+//! will short circuit the request and instead send an HTTP 429 - Too Many Requests
+//! response containing headers describing the rate limit to include:
+//! - "Retry-After" : value representing the rate duration limit
+//! - "X-RateLimit-Limit" : number of requests allowed for the duration
+//! - "X-RateLimit-Remaining" : number of requests remaining for current duration
+//! - "X-RateLimit-Reset" : number of seconds remaining in the duration
+
 [Actix Web docs regarding App.wrap()](https://docs.rs/actix-web/latest/actix_web/struct.App.html#method.wrap)
