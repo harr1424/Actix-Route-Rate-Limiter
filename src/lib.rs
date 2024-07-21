@@ -136,6 +136,7 @@ where
     let now = Utc::now();
     let mut limiter = limiter.lock().unwrap();
 
+    // immutable local copy of hashmap values
     let time_count = {
         limiter.ip_addresses.entry(ip.clone()).or_insert(TimeCount {
             last_request: now,
@@ -164,11 +165,11 @@ where
         new_request_count = 1;
     }
 
-    {
-        let entry = limiter.ip_addresses.entry(ip.clone()).or_insert(TimeCount { last_request: now, num_requests: 0 });
-        entry.last_request = new_last_request_time;
-        entry.num_requests = new_request_count;
-    }
+    // mutable borrow of hashmap values
+    let entry = limiter.ip_addresses.entry(ip.clone()).or_insert(TimeCount { last_request: now, num_requests: 0 });
+    entry.last_request = new_last_request_time;
+    entry.num_requests = new_request_count;
+
 
     if too_many_requests {
         let remaining_time = limiter.duration - (now - last_request_time);
