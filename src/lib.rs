@@ -1,3 +1,21 @@
+//! # Actix Route Rate Limiter
+//!
+//! `Actix Route Rate Limiter` implements the traits
+//! necessary to create [middleware](https://actix.rs/docs/middleware/)
+//! in the Actix Web framework.
+//!
+//! This crate can be used to wrap routes with rate limiting logic by defining a duration
+//! and number of requests that will be forwarded during that duration.
+//!
+//! If a quantity of requests exceeds this amount, the middleware will short circuit the request
+//! and instead send an `HTTP 429 - Too Many Requests` response with headers describing the rate limit:
+//! - `Retry-After` :  the rate-limiting duration, begins at first request received and ends after this elapsed time
+//! - `X-RateLimit-Limit` : number of requests allowed for the duration
+//! - `X-RateLimit-Remaining` : number of requests remaining for current duration
+//! - `X-RateLimit-Reset` : number of seconds remaining in the duration
+//!
+//!
+
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::IpAddr;
@@ -28,6 +46,23 @@ pub struct LimiterBuilder {
     num_requests: usize,
 }
 
+/// Builds a new Limiter. If with_duration() is not used
+/// the default duration will be one second. If with_num_requests()
+/// is not used the default value of one request will be used.
+///  # Example
+/// ```
+/// use chrono::Duration;
+/// use rate_limit::LimiterBuilder;
+///
+/// let limiter = LimiterBuilder::new()
+///         .with_duration(Duration::seconds(20))
+///         .with_num_requests(2)
+///         .build();
+///
+/// assert_eq!(limiter.lock().unwrap().duration.num_seconds() , 20);
+/// assert_eq!(limiter.lock().unwrap().num_requests, 2);
+/// assert!(limiter.lock().unwrap().ip_addresses.is_empty());
+/// ```
 impl LimiterBuilder {
     pub fn new() -> Self {
         Self {
@@ -36,6 +71,7 @@ impl LimiterBuilder {
         }
     }
 
+    /// Specifies the duration for which a limit applies
     pub fn with_duration(mut self, duration: Duration) -> Self {
         self.duration = duration;
         self
@@ -57,7 +93,7 @@ impl LimiterBuilder {
     }
 }
 
-pub struct RateLimiter {
+ pub struct RateLimiter {
     pub(crate) limiter: Arc<Mutex<Limiter>>,
 }
 
@@ -67,7 +103,7 @@ impl RateLimiter {
     }
 }
 
-pub struct RateLimiterMiddleware<S> {
+ pub struct RateLimiterMiddleware<S> {
     pub(crate) service: Arc<S>,
     pub(crate) limiter: Arc<Mutex<Limiter>>,
 }
@@ -114,7 +150,7 @@ where
     }
 }
 
-pub async fn handle_rate_limiting<S, B>(
+async fn handle_rate_limiting<S, B>(
     req: ServiceRequest,
     limiter: Arc<Mutex<Limiter>>,
     service: Arc<S>,
