@@ -64,6 +64,8 @@ pub struct LimiterBuilder {
 /// assert!(limiter.lock().unwrap().ip_addresses.is_empty());
 /// ```
 impl LimiterBuilder {
+    /// If no builder methods are used the limiter will default to
+    /// forwarding one request per second.
     pub fn new() -> Self {
         Self {
             duration: Duration::seconds(1),
@@ -77,6 +79,7 @@ impl LimiterBuilder {
         self
     }
 
+    /// Specifies the number of requests that will be allowed for the given duration
     pub fn with_num_requests(mut self, num_requests: usize) -> Self {
         self.num_requests = num_requests;
         self
