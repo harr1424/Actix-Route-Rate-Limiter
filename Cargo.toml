@@ -1,13 +1,13 @@
 [package]
 name = "actix_route_rate_limiter"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Actix Web middleware to rate limit routes"
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/actix_route_rate_limiter/0.1.2/actix_route_rate_limiter/"
 readme = "README.md"
 repository = "https://github.com/harr1424/Actix-Route-Rate-Limiter"
-keywords = ["rate", "limit", "limiting", "Actix", "Web"]
+keywords = ["actix-web-middleware", "rate-limit", "actix"]
 
 
 [dependencies]
