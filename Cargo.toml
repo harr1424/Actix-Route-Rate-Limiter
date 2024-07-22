@@ -1,6 +1,6 @@
 [package]
 name = "actix_route_rate_limiter"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = "Actix Web middleware to rate limit routes"
 license = "MIT OR Apache-2.0"
