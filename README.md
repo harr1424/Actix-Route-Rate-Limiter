@@ -6,7 +6,7 @@ A library crate that can be used to add rate limiting middleware to Actix Web Ap
 use std::sync::Arc;
 use actix_web::{web, App, HttpServer, HttpResponse};
 use chrono::Duration;
-use rate_limit::{LimiterBuilder, RateLimiter};
+use actix_route_rate_limiter::{LimiterBuilder, RateLimiter};
 
 #[actix_web::main]
 pub async fn main() -> std::io::Result<()> {
