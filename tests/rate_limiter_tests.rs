@@ -1,6 +1,6 @@
 use actix_web::{web, App, HttpServer, HttpResponse};
 use actix_web::test::{init_service, call_service, TestRequest};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use actix_route_rate_limiter::{Limiter, LimiterBuilder, RateLimiter};
 use actix_rt::time::sleep;
 use std::time::Duration as StdDuration;
@@ -9,6 +9,37 @@ use tokio::task::spawn;
 use reqwest::{Client, StatusCode};
 use tokio::sync::Barrier;
 use std::net::{TcpListener, IpAddr, Ipv4Addr, SocketAddr};
+use lazy_static::lazy_static;
+use log::{LevelFilter, Record};
+
+lazy_static! {
+    static ref LOGS: RwLock<Vec<String>> = RwLock::new(vec![]);
+}
+
+struct TestLogger;
+
+impl log::Log for TestLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Info
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            let mut logs = LOGS.write().unwrap();
+            logs.push(format!("{}", record.args()));
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+static LOGGER: TestLogger = TestLogger;
+
+fn init_test_logger() {
+    let _ = log::set_logger(&LOGGER);
+    log::set_max_level(LevelFilter::Info);
+    LOGS.write().unwrap().clear();
+}
 
 async fn start_server(limiter: Arc<Mutex<Limiter>>) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -29,6 +60,8 @@ async fn start_server(limiter: Arc<Mutex<Limiter>>) -> u16 {
 
 #[actix_rt::test]
 async fn test_rate_limiter_allows_two_requests() {
+    init_test_logger();
+
     let limiter = LimiterBuilder::new()
         .with_duration(Duration::seconds(20))
         .with_num_requests(2)
@@ -73,10 +106,16 @@ async fn test_rate_limiter_allows_two_requests() {
     assert_eq!(resp.headers().get("X-RateLimit-Limit").unwrap(), "2");
     assert_eq!(resp.headers().get("X-RateLimit-Remaining").unwrap(), "0");
     assert!(resp.headers().get("X-RateLimit-Reset").is_some());
+
+    let logs = LOGS.read().unwrap();
+    assert!(logs.iter().any(|log| log.contains("Incremented request count")));
+    assert!(logs.iter().any(|log| log.contains("Sending 429 response to")));
 }
 
 #[actix_rt::test]
 async fn test_rate_limiter_allows_after_duration() {
+    init_test_logger();
+
     let limiter = LimiterBuilder::new()
         .with_duration(Duration::seconds(20))
         .with_num_requests(2)
@@ -117,10 +156,15 @@ async fn test_rate_limiter_allows_after_duration() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
+
+    let logs = LOGS.read().unwrap();
+    assert!(logs.iter().any(|log| log.contains("Reset duration and request count")));
 }
 
 #[actix_rt::test]
 async fn test_rate_limiter_with_different_ips() {
+    init_test_logger();
+
     let limiter = LimiterBuilder::new()
         .with_duration(Duration::seconds(20))
         .with_num_requests(2)
@@ -163,32 +207,42 @@ async fn test_rate_limiter_with_different_ips() {
     assert_eq!(resp.headers().get("Retry-After").unwrap(), "20");
     assert_eq!(resp.headers().get("X-RateLimit-Limit").unwrap(), "2");
     assert_eq!(resp.headers().get("X-RateLimit-Remaining").unwrap(), "0");
-    // Check if X-RateLimit-Reset header exists
     assert!(resp.headers().get("X-RateLimit-Reset").is_some());
+
+    let logs = LOGS.read().unwrap();
+    assert!(logs.iter().any(|log| log.contains("Incremented request count for 127.0.0.1")));
+    assert!(logs.iter().any(|log| log.contains("Sending 429 response to 127.0.0.1")));
 }
 
 #[actix_rt::test]
 async fn test_rate_limiter_handles_missing_ip() {
+    init_test_logger();
+
     let limiter = LimiterBuilder::new()
         .with_duration(Duration::seconds(20))
         .with_num_requests(2)
         .build();
 
-    let limiter = Arc::new(limiter);
+    let service = init_service(
+        App::new()
+            .wrap(RateLimiter::new(Arc::clone(&limiter)))
+            .route("/", web::get().to(HttpResponse::Ok)),
+    )
+        .await;
 
-    let port = start_server(Arc::clone(&limiter)).await;
-    let client = Client::new();
+    let req = TestRequest::default().to_request();
+    let resp = call_service(&service, req).await;
+    assert_eq!(resp.status(), actix_web::http::StatusCode::OK);
 
-    // Simulate a request without an IP address
-    let resp = client.get(&format!("http://127.0.0.1:{}/", port))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), StatusCode::OK);
+    let logs = LOGS.read().unwrap();
+    assert!(logs.iter().any(|log| log.contains("Requester socket address was found to be None type and will not be rate limited")));
 }
+
 
 #[actix_rt::test]
 async fn test_rate_limiter_multi_threaded() {
+    init_test_logger();
+
     let limiter = Arc::new(LimiterBuilder::new()
         .with_duration(Duration::seconds(20))
         .with_num_requests(2)
@@ -227,4 +281,8 @@ async fn test_rate_limiter_multi_threaded() {
 
     assert_eq!(success_count, 2);
     assert_eq!(rate_limited_count, 2);
+
+    let logs = LOGS.read().unwrap();
+    assert!(logs.iter().any(|log| log.contains("Incremented request count")));
+    assert!(logs.iter().any(|log| log.contains("Sending 429 response to")));
 }
