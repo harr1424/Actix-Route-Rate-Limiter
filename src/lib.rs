@@ -28,6 +28,7 @@ use actix_web::{Error, HttpResponse};
 use futures::future::{ok, Ready};
 use std::task::{Context, Poll};
 use actix_web::body::{BoxBody, EitherBody, MessageBody};
+use log::{info, warn};
 
 #[derive(Clone)]
 pub struct TimeCount {
@@ -167,6 +168,7 @@ where
         Some(addr) => addr.ip(),
         None => {
             // peer_Addr only returns None during unit test https://docs.rs/actix-web/latest/actix_web/struct.HttpRequest.html#method.peer_addr
+            warn!("{}: Requester socket address was found to be None type and will not be rate limited", Utc::now());
             let res: ServiceResponse<B> = service.call(req).await?;
             return Ok(res.map_into_left_body());
         }
@@ -197,11 +199,12 @@ where
             too_many_requests = true;
         } else {
             new_request_count += 1;
+            info!("{}: Incremented request count for {} to {} requests in current duration", Utc::now(), ip, new_request_count);
         }
     } else {
-        // Reset time and count
         new_last_request_time = now;
         new_request_count = 1;
+        info!("{}: Reset duration and request count for {}", Utc::now(), ip)
     }
 
     // mutable borrow of hashmap values
@@ -211,6 +214,7 @@ where
 
 
     if too_many_requests {
+        info!("{}: Sending 429 response to {}", Utc::now() ,ip);
         let remaining_time = limiter.duration - (now - last_request_time);
         let message = format!("Too many requests. Please try again in {} seconds.", remaining_time.num_seconds().to_string());
 
@@ -226,6 +230,7 @@ where
             .map_into_right_body());
     }
 
+    info!("{}: Forwarding request from {} to {}", Utc::now(), ip, req.path());
     let res: ServiceResponse<B> = service.call(req).await?;
     Ok(res.map_into_left_body())
 }
