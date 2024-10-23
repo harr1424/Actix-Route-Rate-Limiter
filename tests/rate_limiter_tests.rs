@@ -1,5 +1,6 @@
 use actix_web::{web, App, HttpServer, HttpResponse};
 use actix_web::test::{init_service, call_service, TestRequest};
+use rand::Rng;
 use std::sync::{Arc, Mutex, RwLock};
 use actix_route_rate_limiter::{Limiter, LimiterBuilder, RateLimiter};
 use actix_rt::time::sleep;
@@ -285,4 +286,78 @@ async fn test_rate_limiter_multi_threaded() {
     let logs = LOGS.read().unwrap();
     assert!(logs.iter().any(|log| log.contains("Incremented request count")));
     assert!(logs.iter().any(|log| log.contains("Sending 429 response to")));
+}
+
+#[actix_rt::test]
+async fn test_rate_limiter_high_volume_concurrency() {
+    init_test_logger();
+
+    let limiter = Arc::new(LimiterBuilder::new()
+        .with_duration(Duration::seconds(10))
+        .with_num_requests(100) 
+        .build());
+
+    let port = start_server(Arc::clone(&limiter)).await;
+    let barrier = Arc::new(Barrier::new(1000)); // Simulate 1000 concurrent threads
+    let client = Arc::new(Client::new());
+    let mut handles = vec![];
+
+    for _ in 0..1000 {
+        let barrier = Arc::clone(&barrier);
+        let client = Arc::clone(&client);
+        let handle = spawn(async move {
+            barrier.wait().await;
+            let resp = client.get(&format!("http://127.0.0.1:{}/", port))
+                .send()
+                .await
+                .unwrap();
+            resp.status()
+        });
+        handles.push(handle);
+    }
+
+    let mut success_count = 0;
+    let mut rate_limited_count = 0;
+
+    for handle in handles {
+        let status = handle.await.unwrap();
+        if status == StatusCode::OK {
+            success_count += 1;
+        } else if status == StatusCode::TOO_MANY_REQUESTS {
+            rate_limited_count += 1;
+        }
+    }
+
+    // Since 100 requests are allowed, we expect exactly 100 successful requests
+    assert_eq!(success_count, 100);
+    assert_eq!(rate_limited_count, 900); // The rest should be rate limited
+}
+
+#[actix_rt::test]
+async fn test_rate_limiter_random_ips() {
+    init_test_logger();
+
+    let limiter = Arc::new(LimiterBuilder::new()
+        .with_duration(Duration::seconds(20))
+        .with_num_requests(2)
+        .build());
+
+    let port = start_server(Arc::clone(&limiter)).await;
+    let client = Arc::new(Client::new());
+    let mut rng = rand::thread_rng();
+    
+    for _ in 0..50 {
+        // Generate random IP
+        let random_ip = Ipv4Addr::new(rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>());
+        let resp = client.get(&format!("http://127.0.0.1:{}/", port))
+            .header("X-Forwarded-For", random_ip.to_string()) // Simulate random IPs
+            .send()
+            .await
+            .unwrap();
+
+        assert!(resp.status() == StatusCode::OK || resp.status() == StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    let logs = LOGS.read().unwrap();
+    assert!(logs.iter().any(|log| log.contains("Incremented request count")));
 }
