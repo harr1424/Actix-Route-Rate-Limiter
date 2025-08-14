@@ -15,6 +15,7 @@ pub async fn main() -> std::io::Result<()> {
     let limiter = LimiterBuilder::new()
         .with_duration(Duration::seconds(20)) // default value is one second
         .with_num_requests(2) // default value is one request
+        .with_cleanup(Duration::minutes(1)) // default to no cleanup of stale entries
         .build();
 
 
