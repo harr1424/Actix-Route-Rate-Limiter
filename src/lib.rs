@@ -70,6 +70,7 @@ pub struct LimiterBuilder {
 /// let limiter = LimiterBuilder::new()
 ///         .with_duration(Duration::seconds(20))
 ///         .with_num_requests(2)
+///       //.with_cleanup(Duration::minutes(1))  // optionally configure a cleanup task 
 ///         .build();
 ///
 /// assert_eq!(limiter.lock().unwrap().duration.num_seconds() , 20);
